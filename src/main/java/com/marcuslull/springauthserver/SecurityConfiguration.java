@@ -1,8 +1,11 @@
 package com.marcuslull.springauthserver;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -33,7 +36,8 @@ public class SecurityConfiguration {
         // inserted into the filter chain proxy
         http
 //                .csrf(Customizer.withDefaults())
-                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work TODO: configure this properly
+                // TODO: configure this properly
+                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
 
 
                 // ----- BEGIN SESSION MANAGEMENT -----
@@ -62,14 +66,26 @@ public class SecurityConfiguration {
 //                        .invalidateSessionUrl("/invalidSessionPage") // and send them somewhere
                 // session fixation strategy, default is to newSession()
                 .sessionManagement(session -> session.sessionFixation(sessionFixation -> sessionFixation.newSession()))
-                // Option to clear cookies on logout (.deleteCookies("JSESSIONID") doesnt always work)
-                .logout(logout -> logout.addLogoutHandler(new HeaderWriterLogoutHandler(
-                        new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES))))
 
                 // ----- END SESSION MANAGEMENT -----
 
+                // ----- BEGIN LOGOUT CONFIG -----
+
+                // logout auto operations: Invalidate session, Clear holder strategy, clear session repo, cleanup Remember me, clear csrf token, logout success event
+                // Option to clear cookies on logout (.deleteCookies("JSESSIONID") doesnt always work)
+                .logout(logout -> logout.addLogoutHandler(new HeaderWriterLogoutHandler(
+                        new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES))))
+                // custom logout url - no need to specify a permitAll() for the URL as the logout filter comes before the authorize filter in the chain
+//                .logout(logout -> logout.logoutUrl("/someUrl"))
+                // and a custom logout success url
+//                .logout(logout -> logout.logoutSuccessUrl("/someUrl").permitAll()) // here you do need a .permitAll()
+                // customizing the cleanup
+//                .logout(logout -> logout.addLogoutHandler(...)) // a custom handler implementing LogoutHandler
+
+                // ----- END LOGOUT CONFIG -----
+
                 // all requests must be authenticated with exceptions
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/manual-auth-storage").permitAll()
+                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/manual-auth-storage", "/").permitAll()
                         .anyRequest().authenticated())
 
                 // sets the types of authentication that will be available
@@ -126,6 +142,12 @@ public class SecurityConfiguration {
         // listener for lifecycle events - keeps spring security up to date with session events
         // required for concurrent session control
         return new HttpSessionEventPublisher();
+    }
+
+    @Bean
+    public AuthenticationEventPublisher authenticationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        // listener for authentication events
+        return new DefaultAuthenticationEventPublisher(applicationEventPublisher);
     }
 
 //    @Bean

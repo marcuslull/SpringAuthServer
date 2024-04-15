@@ -19,13 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LoginController {
 
     private final AuthenticationManager authenticationManager;
-    // Example authentication with a controller rather than a filter - Storing manually
-    // We need a context repository
-    private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
-    // We need the default strategy
-    SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder.getContextHolderStrategy();
-    // We need a context
-    SecurityContext context = securityContextHolderStrategy.createEmptyContext();
+
     public LoginController(AuthenticationManager authenticationManager) {
         this.authenticationManager = authenticationManager;
     }
@@ -38,6 +32,13 @@ public class LoginController {
 
     @PostMapping("/manual-auth-storage")
     public ResponseEntity<Authentication> manual(@RequestBody LoginRequest loginRequest, HttpServletRequest request, HttpServletResponse response) {
+        // Example authentication with a controller rather than a filter - Storing manually
+        // We need a context repository
+        final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+        // We need the default strategy
+        final SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder.getContextHolderStrategy();
+        // We need a context
+        final SecurityContext context = securityContextHolderStrategy.createEmptyContext();
         UsernamePasswordAuthenticationToken token = UsernamePasswordAuthenticationToken.unauthenticated(
                 loginRequest.userName(), loginRequest.password()); // an unauthenticated login attempt
         Authentication authentication = authenticationManager.authenticate(token); // try and authenticate it
