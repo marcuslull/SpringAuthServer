@@ -23,6 +23,7 @@ public class ApiLoginFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         // authenticates via a JSON string when a user connects to /api-login
+        // this is stateless, does not keep a context - add the auth to a Context and ContextHolderStrategy and repository for state
         if (request.getRequestURI().equals("/api-login")) { //only login attempts at this path otherwise proceed regularly
             LoginRequest loginRequest = new ObjectMapper().readValue(request.getInputStream(), LoginRequest.class);
             Authentication authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(loginRequest.userName(), loginRequest.password());

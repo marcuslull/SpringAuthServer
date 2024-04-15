@@ -16,9 +16,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 
 @Configuration
 @EnableWebSecurity
@@ -32,19 +35,42 @@ public class SecurityConfiguration {
 //                .csrf(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work TODO: configure this properly
 
+
+                // ----- BEGIN SESSION MANAGEMENT -----
+
                 // sets the security context for the user. Determines what kind of persistence the context has across the
                 // session or exceptions.
-                .securityContext(securityContext -> securityContext.securityContextRepository(
-                        new DelegatingSecurityContextRepository( // container for multiple repos, can be omitted
-                                // There are a few of these contexts to choose from or custom
-                                new HttpSessionSecurityContextRepository(), // associates context with the user session
-                                new RequestAttributeSecurityContextRepository() // retains a reference to the context that can be used after the context has been cleared by an exception
+                .securityContext(securityContext -> securityContext
+                        .securityContextRepository(
+                                new DelegatingSecurityContextRepository( // container for multiple repos, can be omitted
+                                        // There are a few of these contexts to choose from or custom
+                                        new HttpSessionSecurityContextRepository(), // associates context with the user session
+                                        new RequestAttributeSecurityContextRepository() // retains a reference to the context that can be used after the context has been cleared by an exception
 //                                new NullSecurityContextRepository() // this one does not persist the context
-                        )
-                ))
+                                )
+                        ))
+                // sets a custom repo for session auth info
+//                .securityContext(securityContext -> securityContext.securityContextRepository(...)) // create a new SecurityContextRepository and pass it here
+                // Http sessions not maintained i.e. stateless - basically configures the SecurityContextRepository to use a NullSecurityContextRepository
+                // may be used for api or Basic login attempts
+//                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // eager session creation
+//                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.ALWAYS))
+                // keeps concurrent user logins to 1. Must implement HttpSessionEventPublisher, see below
+                .sessionManagement(session -> session.maximumSessions(1)) // a new login invalidates the old one
+//                        .maxSessionsPreventsLogin(true)) // or, prevent a second attempt altogether
+//                        .invalidateSessionUrl("/invalidSessionPage") // and send them somewhere
+                // session fixation strategy, default is to newSession()
+                .sessionManagement(session -> session.sessionFixation(sessionFixation -> sessionFixation.newSession()))
+                // Option to clear cookies on logout (.deleteCookies("JSESSIONID") doesnt always work)
+                .logout(logout -> logout.addLogoutHandler(new HeaderWriterLogoutHandler(
+                        new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES))))
 
-                // all requests must be authenticated
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                // ----- END SESSION MANAGEMENT -----
+
+                // all requests must be authenticated with exceptions
+                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/manual-auth-storage").permitAll()
+                        .anyRequest().authenticated())
 
                 // sets the types of authentication that will be available
                 // adds my custom filter that will handle the api-login requests
@@ -93,6 +119,13 @@ public class SecurityConfiguration {
     public PasswordEncoder passwordEncoder() {
         // standard password encoder
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+
+    @Bean
+    public HttpSessionEventPublisher httpSessionEventPublisher() {
+        // listener for lifecycle events - keeps spring security up to date with session events
+        // required for concurrent session control
+        return new HttpSessionEventPublisher();
     }
 
 //    @Bean
