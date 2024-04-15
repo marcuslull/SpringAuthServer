@@ -7,5 +7,6 @@
 <body>
 <p th:text="|Hello, ${context.getAuthentication().getName()}|"></p>
 <a href="/login" th:href="@{/login}" class="btn btn-large btn-success">Log in</a>
+<a href="/login" th:href="@{/logout}" class="btn btn-large btn-success">Log out</a>
 </body>
 </html>

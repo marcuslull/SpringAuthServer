@@ -1,16 +1,24 @@
 package com.marcuslull.springauthserver;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.core.GrantedAuthorityDefaults;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -18,6 +26,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
@@ -28,6 +37,7 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfiguration {
 
     @Bean
@@ -35,9 +45,9 @@ public class SecurityConfiguration {
         // Main configuration builder for the apps security posture. You can have more than one
         // inserted into the filter chain proxy
         http
-//                .csrf(Customizer.withDefaults())
+                .csrf(Customizer.withDefaults())
                 // TODO: configure this properly
-                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
+//                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
 
 
                 // ----- BEGIN SESSION MANAGEMENT -----
@@ -84,9 +94,28 @@ public class SecurityConfiguration {
 
                 // ----- END LOGOUT CONFIG -----
 
-                // all requests must be authenticated with exceptions
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/manual-auth-storage", "/").permitAll()
+                // ----- BEGIN AUTHORIZATION CONFIG -----
+
+                .authorizeHttpRequests(authorize -> authorize
+
+                        // matching rules
+                        .requestMatchers("/", "/manual-auth-storage").permitAll()
+                        .requestMatchers("/another-page").hasAuthority("ROLE_ADMIN")
+//                        .requestMatchers("/resource/**").hasAuthority("ROLE_ADMIN") // everything under /resources/
+//                        .requestMatchers("/resource/{name}").access(
+//                                new WebExpressionAuthorizationManager("#name == authentication.name")) // path variable used to authorize principal to their own resource
+//                        .requestMatchers(HttpMethod.GET).hasAuthority("ROLE_READ") //matching on HttpMethods
+//                        .requestMatchers(HttpMethod.POST).hasAuthority("ROLE_WRITE")
+                        // authorization happens per dispatch not just per request so many endpoints will double authorize
+                        // on the way in and on the return or errors. This prevents the double authorization
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        //custom matchers
+//                        RequestMatcher printView = request -> request.getParameter("print") != null;
+//                        .requestMatchers(printView).hasAuthority("ROLE_PRINT")
+                        // follow it all with the least privilege
                         .anyRequest().authenticated())
+
+                // ----- END AUTHORIZATION CONFIG -----
 
                 // sets the types of authentication that will be available
                 // adds my custom filter that will handle the api-login requests
@@ -97,6 +126,31 @@ public class SecurityConfiguration {
 
         return http.build();
     }
+
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
+        // this is a custom config and is optional
+        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
+        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
+        return hierarchy;
+    }
+
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        // applies the above role hierarchy to method level security
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
+
+//    @Bean
+//    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
+//        // define a custom prefix for authorization
+//        // role-based authorization uses ROLE_ as a prefix
+//        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
+//    }
 
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
@@ -126,7 +180,7 @@ public class SecurityConfiguration {
         UserDetails admin = User.builder()
                 .username("admin")
                 .password("{bcrypt}$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW") // 'password'
-                .roles("USER", "ADMIN")
+                .roles("ADMIN")
                 .build();
         return new InMemoryUserDetailsManager(user, admin); // an in mem password storage
     }
