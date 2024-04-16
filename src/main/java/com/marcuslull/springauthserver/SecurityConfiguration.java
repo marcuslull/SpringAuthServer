@@ -42,24 +42,6 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 public class SecurityConfiguration {
 
     @Bean
-    static RoleHierarchy roleHierarchy() {
-        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
-        // this is a custom config and is optional
-        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
-        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
-        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
-        return hierarchy;
-    }
-
-    @Bean
-    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
-        // applies the above role hierarchy to method level security
-        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
-        expressionHandler.setRoleHierarchy(roleHierarchy);
-        return expressionHandler;
-    }
-
-    @Bean
     @Order(1) // determines order of processing - multiple security filter chains is a valid config
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         http
@@ -74,7 +56,7 @@ public class SecurityConfiguration {
                         // on the way in and on the return or errors. This prevents the double authorization
                         .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                         // follow it all with the least privilege
-                        .anyRequest().authenticated())
+                        .anyRequest().hasAuthority("ROLE_SUPER"))
                 // adds my custom filter that will handle the api-login requests
                 .addFilterBefore(new ApiLoginFilter(authenticationManager(userDetailsService(), passwordEncoder())), UsernamePasswordAuthenticationFilter.class);
         return http.build();
@@ -161,12 +143,23 @@ public class SecurityConfiguration {
         return http.build();
     }
 
-//    @Bean
-//    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
-//        // define a custom prefix for authorization
-//        // role-based authorization uses ROLE_ as a prefix
-//        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
-//    }
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
+        // this is a custom config and is optional
+        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
+        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
+        return hierarchy;
+    }
+
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        // applies the above role hierarchy to method level security
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
 
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
@@ -187,18 +180,28 @@ public class SecurityConfiguration {
         // Registers an in mem user details manager with test user, registers the Dao auth provider (via .withDefault...())
         // with auth manager.
         // User.withDefaultPasswordEncoder() is considered unsafe for production and is only intended for sample applications.
+        UserDetails guest = User.withDefaultPasswordEncoder() // only use this in non production env
+                .username("guest")
+                .password("password")
+                .roles("GUEST")
+                .build();
         UserDetails user = User.withDefaultPasswordEncoder() // only use this in non production env
                 .username("user")
                 .password("password")
                 .roles("USER")
                 .build();
         // building a user without withDefaultsPasswordEncoder(), password is stored as bcrypt hash
+        UserDetails superUser = User.builder()
+                .username("super")
+                .password("{bcrypt}$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW") // 'password'
+                .roles("SUPER")
+                .build();
         UserDetails admin = User.builder()
                 .username("admin")
                 .password("{bcrypt}$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW") // 'password'
                 .roles("ADMIN")
                 .build();
-        return new InMemoryUserDetailsManager(user, admin); // an in mem password storage
+        return new InMemoryUserDetailsManager(guest, user, superUser, admin); // an in mem password storage
     }
 
     @Bean
@@ -227,6 +230,13 @@ public class SecurityConfiguration {
     }
 
 //    @Bean
+//    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
+//        // define a custom prefix for authorization
+//        // role-based authorization uses ROLE_ as a prefix
+//        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
+//    }
+
+//    @Bean
 //    DataSource dataSource() {
 //        // For embedded data sources such as H2 you need to explicitly define the datasource.
 //        // this is not needed for a traditional SQL DB
@@ -235,7 +245,7 @@ public class SecurityConfiguration {
 //                .addScript(JdbcDaoImpl.DEFAULT_USER_SCHEMA_DDL_LOCATION) // use the default DDL schema
 //                .build();
 //    }
-//
+
 //    @Bean
 //    UserDetailsManager users(DataSource dataSource) {
 //        // if using an embedded DB solution this is how you would specify the datasource

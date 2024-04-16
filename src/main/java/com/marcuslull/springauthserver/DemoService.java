@@ -3,7 +3,6 @@ package com.marcuslull.springauthserver;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.access.prepost.PreFilter;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.stereotype.Service;
 
@@ -11,7 +10,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.ArrayList;
 import java.util.Collection;
 
 @Service
@@ -33,33 +31,6 @@ public class DemoService {
         return demoAccountEntity;
     }
 
-    //then apply it to all methods that need to return a data object
-    @RequireOwnership // if the principal owns the object it will return, otherwise a 403
-    public DemoAccountEntity returnAccount() {
-        // do stuff
-        DemoAccountEntity demoAccountEntity = new DemoAccountEntity();
-        demoAccountEntity.setOwner("admin");
-        return demoAccountEntity;
-    }
-
-    // annotation applied
-    @IsAdmin
-    public DemoAccountEntity readAccount(Long id) {
-        // ... is only returned if the DemoAccountEntity belongs to the logged-in user
-        return null;
-    }
-
-    // METHOD LEVEL PARAMETER FILTERING
-    @PreFilter("filterObject.owner == authentication.name")
-    // the method will only have access to the objects that pass the filter
-    @PostFilter("filterObject.owner == authentication.name")
-    // the method will only return instances that pass the filter
-    public Collection<DemoAccountEntity> parameterFilteringExample(Collection<DemoAccountEntity> accounts) {
-        // the DemoAccountEntity instances passed in must be owned by the principal
-        // @Pre/PostFilter supports arrays, collections, maps, and streams (so long as the stream is still open)
-        return new ArrayList<>();
-    }
-
     // a good way to handle secure data object references is to create a custom annotation:
     @Target({ElementType.METHOD, ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
@@ -67,11 +38,36 @@ public class DemoService {
     public @interface RequireOwnership {
     }
 
+    //then apply it to all methods that need to return a data object
+    @RequireOwnership // if the principal owns the object it will return, otherwise a 403
+    public DemoAccountEntity returnAccount() {
+        DemoAccountEntity demoAccountEntity1 = new DemoAccountEntity();
+        demoAccountEntity1.setOwner("super");
+        return demoAccountEntity1;
+    }
 
     // another custom annotation example
     @Target({ElementType.METHOD, ElementType.TYPE})
     @Retention(RetentionPolicy.RUNTIME)
     @PreAuthorize("hasRole('ADMIN')")
     public @interface IsAdmin {
+    }
+
+    // annotation applied
+    @IsAdmin // only returned if the user is an ADMIN
+    public DemoAccountEntity returnAccount2() {
+        return new DemoAccountEntity();
+    }
+
+
+    // METHOD LEVEL PARAMETER FILTERING
+//    @PreFilter("filterObject.owner == authentication.name")
+    // the method will only have access to the objects that pass the filter
+    @PostFilter("filterObject.owner == authentication.name")
+    // the method will only return instances that pass the filter
+    public Collection<DemoAccountEntity> parameterFilteringExample(Collection<DemoAccountEntity> accounts) {
+        // the DemoAccountEntity instances passed in must be owned by the principal
+        // @Pre/PostFilter supports arrays, collections, maps, and streams (so long as the stream is still open)
+        return accounts;
     }
 }
