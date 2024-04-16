@@ -24,7 +24,7 @@ public class LoginController {
         this.authenticationManager = authenticationManager;
     }
 
-    @PostMapping("/api-login")
+    @PostMapping("/api/api-login-test")
     public ResponseEntity<Authentication> apiLogin() {
         // disable form login and csrf for this to work
         return ResponseEntity.ok(SecurityContextHolder.getContext().getAuthentication());

@@ -4,7 +4,7 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
@@ -18,7 +18,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -26,7 +26,6 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
@@ -41,14 +40,50 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 public class SecurityConfiguration {
 
     @Bean
+    static RoleHierarchy roleHierarchy() {
+        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
+        // this is a custom config and is optional
+        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
+        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
+        return hierarchy;
+    }
+
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        // applies the above role hierarchy to method level security
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
+
+    @Bean
+    @Order(1) // determines order of processing - multiple security filter chains is a valid config
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+        http
+                // This security filter chain only applies to routes that match the following...
+                .securityMatcher("/api/**") // when defining an order always include a filter for context
+                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
+                // Http sessions not maintained i.e. stateless - basically configures the SecurityContextRepository to use a NullSecurityContextRepository
+                // may be used for api or Basic login attempts
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize
+                        // authorization happens per dispatch not just per request so many endpoints will double authorize
+                        // on the way in and on the return or errors. This prevents the double authorization
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        // follow it all with the least privilege
+                        .anyRequest().authenticated())
+                // adds my custom filter that will handle the api-login requests
+                .addFilterBefore(new ApiLoginFilter(authenticationManager(userDetailsService(), passwordEncoder())), UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception { // implement Filter or extend OncePerRequestFilter
         // Main configuration builder for the apps security posture. You can have more than one
         // inserted into the filter chain proxy
         http
                 .csrf(Customizer.withDefaults())
-                // TODO: configure this properly
-//                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
-
 
                 // ----- BEGIN SESSION MANAGEMENT -----
 
@@ -97,9 +132,8 @@ public class SecurityConfiguration {
                 // ----- BEGIN AUTHORIZATION CONFIG -----
 
                 .authorizeHttpRequests(authorize -> authorize
-
                         // matching rules
-                        .requestMatchers("/", "/manual-auth-storage").permitAll()
+                        .requestMatchers("/", "/manual-auth-storage").permitAll() // authenticating on /manual... requires csrf disable
                         .requestMatchers("/another-page").hasAuthority("ROLE_ADMIN")
 //                        .requestMatchers("/resource/**").hasAuthority("ROLE_ADMIN") // everything under /resources/
 //                        .requestMatchers("/resource/{name}").access(
@@ -118,31 +152,11 @@ public class SecurityConfiguration {
                 // ----- END AUTHORIZATION CONFIG -----
 
                 // sets the types of authentication that will be available
-                // adds my custom filter that will handle the api-login requests
-                .addFilterBefore(new ApiLoginFilter(authenticationManager(userDetailsService(), passwordEncoder())), UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(Customizer.withDefaults()) // enables basic auth
                 .formLogin(Customizer.withDefaults()); // enables an HTML form based login
 //                .formLogin(form -> form.loginPage("/login").permitAll()); // specifying a custom login page
 
         return http.build();
-    }
-
-    @Bean
-    static RoleHierarchy roleHierarchy() {
-        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
-        // this is a custom config and is optional
-        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
-        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
-        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
-        return hierarchy;
-    }
-
-    @Bean
-    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
-        // applies the above role hierarchy to method level security
-        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
-        expressionHandler.setRoleHierarchy(roleHierarchy);
-        return expressionHandler;
     }
 
 //    @Bean
