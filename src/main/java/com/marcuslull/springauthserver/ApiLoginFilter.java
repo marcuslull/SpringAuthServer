@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -24,7 +25,8 @@ public class ApiLoginFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         // authenticates via a JSON string when a user connects to /api-login
         // this is stateless, does not keep a context - add the auth to a Context and ContextHolderStrategy and repository for state
-        if (request.getRequestURI().equals("/api-login")) { //only login attempts at this path otherwise proceed regularly
+        AntPathMatcher pathMatcher = new AntPathMatcher();
+        if (pathMatcher.match("/api/**", request.getRequestURI())) { //only login attempts at this path otherwise proceed regularly
             LoginRequest loginRequest = new ObjectMapper().readValue(request.getInputStream(), LoginRequest.class);
             Authentication authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(loginRequest.userName(), loginRequest.password());
             Authentication authenticationResponse = this.authenticationManager.authenticate(authenticationRequest);

@@ -1,16 +1,26 @@
 package com.marcuslull.springauthserver;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationEventPublisher;
+import org.springframework.security.authorization.SpringAuthorizationEventPublisher;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -28,17 +38,36 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfiguration {
+
+    @Bean
+    @Order(1) // determines order of processing - multiple security filter chains is a valid config
+    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+        http
+                // This security filter chain only applies to routes that match the following...
+                .securityMatcher("/api/**") // when defining an order always include a filter for context
+                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
+                // Http sessions not maintained i.e. stateless - basically configures the SecurityContextRepository to use a NullSecurityContextRepository
+                // may be used for api or Basic login attempts
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize
+                        // authorization happens per dispatch not just per request so many endpoints will double authorize
+                        // on the way in and on the return or errors. This prevents the double authorization
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        // follow it all with the least privilege
+                        .anyRequest().hasAuthority("ROLE_SUPER"))
+                // adds my custom filter that will handle the api-login requests
+                .addFilterBefore(new ApiLoginFilter(authenticationManager(userDetailsService(), passwordEncoder())), UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception { // implement Filter or extend OncePerRequestFilter
         // Main configuration builder for the apps security posture. You can have more than one
         // inserted into the filter chain proxy
         http
-//                .csrf(Customizer.withDefaults())
-                // TODO: configure this properly
-                .csrf(csrf -> csrf.disable()) // disables csrf for now so the api-login will work. Also disables the logout confirmation page
-
+                .csrf(Customizer.withDefaults())
 
                 // ----- BEGIN SESSION MANAGEMENT -----
 
@@ -84,18 +113,52 @@ public class SecurityConfiguration {
 
                 // ----- END LOGOUT CONFIG -----
 
-                // all requests must be authenticated with exceptions
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/manual-auth-storage", "/").permitAll()
+                // ----- BEGIN AUTHORIZATION CONFIG -----
+
+                .authorizeHttpRequests(authorize -> authorize
+                        // matching rules
+                        .requestMatchers("/", "/manual-auth-storage").permitAll() // authenticating on /manual... requires csrf disable
+                        .requestMatchers("/another-page").hasAuthority("ROLE_ADMIN")
+//                        .requestMatchers("/resource/**").hasAuthority("ROLE_ADMIN") // everything under /resources/
+//                        .requestMatchers("/resource/{name}").access(
+//                                new WebExpressionAuthorizationManager("#name == authentication.name")) // path variable used to authorize principal to their own resource
+//                        .requestMatchers(HttpMethod.GET).hasAuthority("ROLE_READ") //matching on HttpMethods
+//                        .requestMatchers(HttpMethod.POST).hasAuthority("ROLE_WRITE")
+                        // authorization happens per dispatch not just per request so many endpoints will double authorize
+                        // on the way in and on the return or errors. This prevents the double authorization
+                        .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                        //custom matchers
+//                        RequestMatcher printView = request -> request.getParameter("print") != null;
+//                        .requestMatchers(printView).hasAuthority("ROLE_PRINT")
+                        // follow it all with the least privilege
                         .anyRequest().authenticated())
 
+                // ----- END AUTHORIZATION CONFIG -----
+
                 // sets the types of authentication that will be available
-                // adds my custom filter that will handle the api-login requests
-                .addFilterBefore(new ApiLoginFilter(authenticationManager(userDetailsService(), passwordEncoder())), UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(Customizer.withDefaults()) // enables basic auth
                 .formLogin(Customizer.withDefaults()); // enables an HTML form based login
 //                .formLogin(form -> form.loginPage("/login").permitAll()); // specifying a custom login page
 
         return http.build();
+    }
+
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
+        // this is a custom config and is optional
+        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
+        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
+        return hierarchy;
+    }
+
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        // applies the above role hierarchy to method level security
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
     }
 
     @Bean
@@ -117,18 +180,28 @@ public class SecurityConfiguration {
         // Registers an in mem user details manager with test user, registers the Dao auth provider (via .withDefault...())
         // with auth manager.
         // User.withDefaultPasswordEncoder() is considered unsafe for production and is only intended for sample applications.
+        UserDetails guest = User.withDefaultPasswordEncoder() // only use this in non production env
+                .username("guest")
+                .password("password")
+                .roles("GUEST")
+                .build();
         UserDetails user = User.withDefaultPasswordEncoder() // only use this in non production env
                 .username("user")
                 .password("password")
                 .roles("USER")
                 .build();
         // building a user without withDefaultsPasswordEncoder(), password is stored as bcrypt hash
+        UserDetails superUser = User.builder()
+                .username("super")
+                .password("{bcrypt}$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW") // 'password'
+                .roles("SUPER")
+                .build();
         UserDetails admin = User.builder()
                 .username("admin")
                 .password("{bcrypt}$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW") // 'password'
-                .roles("USER", "ADMIN")
+                .roles("ADMIN")
                 .build();
-        return new InMemoryUserDetailsManager(user, admin); // an in mem password storage
+        return new InMemoryUserDetailsManager(guest, user, superUser, admin); // an in mem password storage
     }
 
     @Bean
@@ -150,6 +223,19 @@ public class SecurityConfiguration {
         return new DefaultAuthenticationEventPublisher(applicationEventPublisher);
     }
 
+    @Bean
+    public AuthorizationEventPublisher authorizationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        // listener for authorization events
+        return new SpringAuthorizationEventPublisher(applicationEventPublisher);
+    }
+
+//    @Bean
+//    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
+//        // define a custom prefix for authorization
+//        // role-based authorization uses ROLE_ as a prefix
+//        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
+//    }
+
 //    @Bean
 //    DataSource dataSource() {
 //        // For embedded data sources such as H2 you need to explicitly define the datasource.
@@ -159,7 +245,7 @@ public class SecurityConfiguration {
 //                .addScript(JdbcDaoImpl.DEFAULT_USER_SCHEMA_DDL_LOCATION) // use the default DDL schema
 //                .build();
 //    }
-//
+
 //    @Bean
 //    UserDetailsManager users(DataSource dataSource) {
 //        // if using an embedded DB solution this is how you would specify the datasource
