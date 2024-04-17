@@ -1,6 +1,7 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.marcuslull.springauthserver.model.LoginRequest;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -1,5 +1,7 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.controllers;
 
+import com.marcuslull.springauthserver.model.DemoAccountEntity;
+import com.marcuslull.springauthserver.services.DemoService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;

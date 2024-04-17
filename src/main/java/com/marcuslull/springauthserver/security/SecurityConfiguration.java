@@ -1,4 +1,4 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.security;
 
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,6 +41,11 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @EnableMethodSecurity
 public class SecurityConfiguration {
 
+
+
+
+
+    // SECURITY FILTER CONFIGURATION
     @Bean
     @Order(1) // determines order of processing - multiple security filter chains is a valid config
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
@@ -70,9 +75,7 @@ public class SecurityConfiguration {
                 .csrf(Customizer.withDefaults())
 
                 // ----- BEGIN SESSION MANAGEMENT -----
-
-                // sets the security context for the user. Determines what kind of persistence the context has across the
-                // session or exceptions.
+                // sets the security context for the user. Determines what kind of persistence the context has across the session or exceptions.
                 .securityContext(securityContext -> securityContext
                         .securityContextRepository(
                                 new DelegatingSecurityContextRepository( // container for multiple repos, can be omitted
@@ -95,11 +98,9 @@ public class SecurityConfiguration {
 //                        .invalidateSessionUrl("/invalidSessionPage") // and send them somewhere
                 // session fixation strategy, default is to newSession()
                 .sessionManagement(session -> session.sessionFixation(sessionFixation -> sessionFixation.newSession()))
-
                 // ----- END SESSION MANAGEMENT -----
 
                 // ----- BEGIN LOGOUT CONFIG -----
-
                 // logout auto operations: Invalidate session, Clear holder strategy, clear session repo, cleanup Remember me, clear csrf token, logout success event
                 // Option to clear cookies on logout (.deleteCookies("JSESSIONID") doesnt always work)
                 .logout(logout -> logout.addLogoutHandler(new HeaderWriterLogoutHandler(
@@ -110,11 +111,9 @@ public class SecurityConfiguration {
 //                .logout(logout -> logout.logoutSuccessUrl("/someUrl").permitAll()) // here you do need a .permitAll()
                 // customizing the cleanup
 //                .logout(logout -> logout.addLogoutHandler(...)) // a custom handler implementing LogoutHandler
-
                 // ----- END LOGOUT CONFIG -----
 
                 // ----- BEGIN AUTHORIZATION CONFIG -----
-
                 .authorizeHttpRequests(authorize -> authorize
                         // matching rules
                         .requestMatchers("/", "/manual-auth-storage").permitAll() // authenticating on /manual... requires csrf disable
@@ -132,49 +131,21 @@ public class SecurityConfiguration {
 //                        .requestMatchers(printView).hasAuthority("ROLE_PRINT")
                         // follow it all with the least privilege
                         .anyRequest().authenticated())
-
                 // ----- END AUTHORIZATION CONFIG -----
 
                 // sets the types of authentication that will be available
                 .httpBasic(Customizer.withDefaults()) // enables basic auth
                 .formLogin(Customizer.withDefaults()); // enables an HTML form based login
 //                .formLogin(form -> form.loginPage("/login").permitAll()); // specifying a custom login page
-
         return http.build();
     }
 
-    @Bean
-    static RoleHierarchy roleHierarchy() {
-        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
-        // this is a custom config and is optional
-        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
-        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
-        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
-        return hierarchy;
-    }
 
-    @Bean
-    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
-        // applies the above role hierarchy to method level security
-        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
-        expressionHandler.setRoleHierarchy(roleHierarchy);
-        return expressionHandler;
-    }
 
-    @Bean
-    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
-        // only required for customization - this will normally be created on its own using the DaoAuthenticationProvider
-        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
-        authenticationProvider.setUserDetailsService(userDetailsService);
-        authenticationProvider.setPasswordEncoder(passwordEncoder);
 
-//        // A customization to retain credentials for keeping a session of some sort
-//        ProviderManager providerManager = new ProviderManager(authenticationProvider);
-//        providerManager.setEraseCredentialsAfterAuthentication(false);
 
-        return new ProviderManager(authenticationProvider);
-    }
 
+    // AUTHENTICATION CONFIGURATION
     @Bean
     public UserDetailsService userDetailsService() {
         // Registers an in mem user details manager with test user, registers the Dao auth provider (via .withDefault...())
@@ -211,24 +182,60 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        // only required for customization - this will normally be created on its own using the DaoAuthenticationProvider
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(userDetailsService);
+        authenticationProvider.setPasswordEncoder(passwordEncoder);
+//        // A customization to retain credentials for keeping a session of some sort
+//        ProviderManager providerManager = new ProviderManager(authenticationProvider);
+//        providerManager.setEraseCredentialsAfterAuthentication(false);
+        return new ProviderManager(authenticationProvider);
+    }
+
+
+
+
+
+
+    // AUTHORITY CONFIGURATION
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        // configuring authorization role hierarchy. Each super role will have lower reachable authorities
+        // this is a custom config and is optional
+        RoleHierarchyImpl hierarchy = new RoleHierarchyImpl();
+        // ADMIN has SUPER, USER, and GUEST roles when evaluated against an Authorization manager
+        hierarchy.setHierarchy("ROLE_ADMIN > ROLE_SUPER > ROLE_USER > ROLE_GUEST");
+        return hierarchy;
+    }
+
+    @Bean
+    static MethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        // applies the above role hierarchy to method level security
+        DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
+        expressionHandler.setRoleHierarchy(roleHierarchy);
+        return expressionHandler;
+    }
+
+
+
+
+
+
+    // CONCURRENT SESSION DETECTION
+    @Bean
     public HttpSessionEventPublisher httpSessionEventPublisher() {
         // listener for lifecycle events - keeps spring security up to date with session events
         // required for concurrent session control
         return new HttpSessionEventPublisher();
     }
 
-    @Bean
-    public AuthenticationEventPublisher authenticationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-        // listener for authentication events
-        return new DefaultAuthenticationEventPublisher(applicationEventPublisher);
-    }
 
-    @Bean
-    public AuthorizationEventPublisher authorizationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-        // listener for authorization events
-        return new SpringAuthorizationEventPublisher(applicationEventPublisher);
-    }
 
+
+
+
+    //CUSTOM AUTHORIZATION PREFIX CONFIGURATION
 //    @Bean
 //    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
 //        // define a custom prefix for authorization
@@ -236,6 +243,12 @@ public class SecurityConfiguration {
 //        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
 //    }
 
+
+
+
+
+
+    // EMBEDDED DATASOURCE CONFIGURATION
 //    @Bean
 //    DataSource dataSource() {
 //        // For embedded data sources such as H2 you need to explicitly define the datasource.

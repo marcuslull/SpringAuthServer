@@ -1,5 +1,6 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.controllers;
 
+import com.marcuslull.springauthserver.model.LoginRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.model;
 
 import lombok.Getter;
 import lombok.Setter;

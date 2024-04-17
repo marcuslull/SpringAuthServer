@@ -1,4 +1,4 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.controllers;
 
 import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.security.core.context.SecurityContext;

@@ -1,5 +1,6 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.services;
 
+import com.marcuslull.springauthserver.model.DemoAccountEntity;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
