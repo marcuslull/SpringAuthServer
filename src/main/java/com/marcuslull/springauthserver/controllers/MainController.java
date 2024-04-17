@@ -1,4 +1,4 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.controllers;
 
 import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.security.core.context.SecurityContext;
@@ -17,7 +17,12 @@ public class MainController {
     }
 
     @GetMapping("/another-page")
-    public String anotherPage() {
+    public String anotherPage(Model model) {
         return "another-page";
+    }
+
+    @GetMapping("/access-denied")
+    public String accessDenied(Model model) {
+        return "access-denied";
     }
 }

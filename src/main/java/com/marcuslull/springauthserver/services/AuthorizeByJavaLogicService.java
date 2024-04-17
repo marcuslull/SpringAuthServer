@@ -1,4 +1,4 @@
-package com.marcuslull.springauthserver;
+package com.marcuslull.springauthserver.services;
 
 import org.springframework.security.access.expression.method.MethodSecurityExpressionOperations;
 import org.springframework.security.access.prepost.PreAuthorize;
