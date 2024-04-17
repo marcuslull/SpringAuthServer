@@ -1,7 +1,6 @@
 package com.marcuslull.springauthserver.security;
 
 import jakarta.servlet.DispatcherType;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -9,13 +8,9 @@ import org.springframework.security.access.expression.method.DefaultMethodSecuri
 import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
-import org.springframework.security.authentication.AuthenticationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.DefaultAuthenticationEventPublisher;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.authorization.AuthorizationEventPublisher;
-import org.springframework.security.authorization.SpringAuthorizationEventPublisher;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,6 +28,8 @@ import org.springframework.security.web.authentication.logout.HeaderWriterLogout
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 
@@ -40,10 +37,6 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfiguration {
-
-
-
-
 
     // SECURITY FILTER CONFIGURATION
     @Bean
@@ -72,7 +65,35 @@ public class SecurityConfiguration {
         // Main configuration builder for the apps security posture. You can have more than one
         // inserted into the filter chain proxy
         http
-                .csrf(Customizer.withDefaults())
+                // ----- BEGIN CSRF CONFIG -----
+                // ignore csrf configurations for the following dir. This seems to be finicky, I cant get wild cards to work, just exact matches.
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/manual-auth-storage"))
+                .csrf(Customizer.withDefaults()) // default config explicitly defined - loads spring csrf protection defaults
+                //  config explicitly defined - persists the csrf token in the session
+                .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository())) // reads from: X-CSRF-TOKEN
+                // JavaScript compatible settings - persists outside the session
+//                .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())) // reads from: X-XSRF-TOKEN, writes to a cookie named: XSRF-TOKEN
+                // implement a custom token repo by implementing CsrfTokenRepository then...
+//                .csrf(csrf -> csrf.csrfTokenRepository(new CustomCsrfTokenRepositoryName()))
+                //  config explicitly defined - Handles csrf tokens and provides BREACH protection
+                .csrf(csrf -> csrf.csrfTokenRequestHandler(new XorCsrfTokenRequestAttributeHandler())) // BREACH protection randomizes the token with each exchange
+                // use a non-BREACH csrf handler
+//                .csrf(csrf -> csrf.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()) // does not provide the BREACH protection
+                // implement a custom token handler by implementing CsrfTokenRequestHandler
+//                .csrf(csrf -> csrf.csrfTokenRequestHandler(new CustomCsrfTokenRequestHandlerName())
+
+                // Integrating csrf with front-end apps
+                // spring defaults to loading the token on unsafe HTTPS methods only.
+//                XorCsrfTokenRequestAttributeHandler handler = new XorCsrfTokenRequestAttributeHandler(); // customize the handler
+//                handler.setCsrfRequestAttributeName(null); // set the name to null, so it forces an activation every request
+//                .csrf(csrf -> csrf.csrfTokenRequestHandler(handler)) // apply it as the handler
+                // Single Page Applications, SPAs require special handling because only components are refreshed rather than the whole page
+                // making .csrf handling occur when a request has an unsafe HTTP method. See documentation for configuration
+                // different JS frameworks/libraries handle csrf tokens in different ways. See documentation for compatible configurations
+                // disable csrf app wide - csrf protection not required for non-browser related traffic.
+//                .csrf(csrf -> csrf.disable()) // Also disables the logout confirmation page
+                // Multi-part uploads should include the csrf token in the (JS) header or (other) body. See docs for parsing token from body
+                // ----- END CSRF CONFIG -----
 
                 // ----- BEGIN SESSION MANAGEMENT -----
                 // sets the security context for the user. Determines what kind of persistence the context has across the session or exceptions.
@@ -133,16 +154,14 @@ public class SecurityConfiguration {
                         .anyRequest().authenticated())
                 // ----- END AUTHORIZATION CONFIG -----
 
+                // handling access denied messages
+                .exceptionHandling(exceptionHandling -> exceptionHandling.accessDeniedPage("/access-denied"))
                 // sets the types of authentication that will be available
                 .httpBasic(Customizer.withDefaults()) // enables basic auth
                 .formLogin(Customizer.withDefaults()); // enables an HTML form based login
 //                .formLogin(form -> form.loginPage("/login").permitAll()); // specifying a custom login page
         return http.build();
     }
-
-
-
-
 
 
     // AUTHENTICATION CONFIGURATION
@@ -194,10 +213,6 @@ public class SecurityConfiguration {
     }
 
 
-
-
-
-
     // AUTHORITY CONFIGURATION
     @Bean
     static RoleHierarchy roleHierarchy() {
@@ -218,10 +233,6 @@ public class SecurityConfiguration {
     }
 
 
-
-
-
-
     // CONCURRENT SESSION DETECTION
     @Bean
     public HttpSessionEventPublisher httpSessionEventPublisher() {
@@ -231,10 +242,6 @@ public class SecurityConfiguration {
     }
 
 
-
-
-
-
     //CUSTOM AUTHORIZATION PREFIX CONFIGURATION
 //    @Bean
 //    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
@@ -242,10 +249,6 @@ public class SecurityConfiguration {
 //        // role-based authorization uses ROLE_ as a prefix
 //        return new GrantedAuthorityDefaults("CUSTOMPREFIX_");
 //    }
-
-
-
-
 
 
     // EMBEDDED DATASOURCE CONFIGURATION

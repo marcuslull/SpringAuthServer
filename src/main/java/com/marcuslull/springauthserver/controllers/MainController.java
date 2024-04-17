@@ -17,7 +17,12 @@ public class MainController {
     }
 
     @GetMapping("/another-page")
-    public String anotherPage() {
+    public String anotherPage(Model model) {
         return "another-page";
+    }
+
+    @GetMapping("/access-denied")
+    public String accessDenied(Model model) {
+        return "access-denied";
     }
 }
