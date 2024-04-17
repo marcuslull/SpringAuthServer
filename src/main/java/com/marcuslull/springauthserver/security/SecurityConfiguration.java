@@ -252,6 +252,40 @@ public class SecurityConfiguration {
     }
 
 
+
+    // HTTP FIREWALL CONFIGURATION
+    // this normalizes all URL paths that come into the server. Spec allows for non-standard path parameters in the URL, this could be bad
+    // So, for example, an original request path of /secure;hack=1/somefile.html;hack=2 is returned as /secure/somefile.html.
+    // here are some exceptions that could be made...
+
+//    @Bean
+//    public StrictHttpFirewall httpFirewall() {
+//        // some legit system could make use out of ; in the path
+//        StrictHttpFirewall firewall = new StrictHttpFirewall();
+//        firewall.setAllowSemicolon(true);
+//        return firewall;
+//    }
+
+//    @Bean
+//    public StrictHttpFirewall httpFirewall() {
+//        // limiting HTTP methods
+//        StrictHttpFirewall firewall = new StrictHttpFirewall();
+//        firewall.setAllowedHttpMethods(Arrays.asList("GET", "POST"));
+//        return firewall;
+//    }
+
+//    @Bean
+//    public StrictHttpFirewall httpFirewall() {
+//        // allow non-standard header names, values or parameter values
+//        StrictHttpFirewall firewall = new StrictHttpFirewall();
+//        firewall.setAllowedHeaderNames((header) -> true);
+//        firewall.setAllowedHeaderValues((header) -> true);
+//        firewall.setAllowedParameterNames((parameter) -> true);
+//        return firewall;
+//    }
+
+
+
     //CUSTOM AUTHORIZATION PREFIX CONFIGURATION
 //    @Bean
 //    static GrantedAuthorityDefaults grantedAuthorityDefaults() {
