@@ -1,6 +1,8 @@
 package com.marcuslull.springauthserver.security;
 
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -22,6 +24,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
@@ -32,6 +35,8 @@ import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+
+import java.io.IOException;
 
 @Configuration
 @EnableWebSecurity
@@ -94,6 +99,11 @@ public class SecurityConfiguration {
 //                .csrf(csrf -> csrf.disable()) // Also disables the logout confirmation page
                 // Multi-part uploads should include the csrf token in the (JS) header or (other) body. See docs for parsing token from body
                 // ----- END CSRF CONFIG -----
+
+                // ----- BEGIN HEADERS CONFIG -----
+                // see documentation - there are a bunch of security header options spring provides by default that can be disabled or re-configured
+                // consideration for header option should be given dependent on the type of app being secured
+                // ----- END HEADERS CONFIG -----
 
                 // ----- BEGIN SESSION MANAGEMENT -----
                 // sets the security context for the user. Determines what kind of persistence the context has across the session or exceptions.
