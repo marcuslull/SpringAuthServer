@@ -36,8 +36,13 @@ import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -71,6 +76,10 @@ public class SecurityConfiguration {
         // Main configuration builder for the apps security posture. You can have more than one
         // inserted into the filter chain proxy
         http
+                // CORS configurations are applied prior to authentications
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Configure source declared as a Bean below
+//                .cors(Customizer.withDefaults()) // configure default spring CORS config suitable for hosting public endpoints
+
                 // ----- BEGIN CSRF CONFIG -----
                 // ignore csrf configurations for the following dir. This seems to be finicky, I cant get wild cards to work, just exact matches.
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/manual-auth-storage"))
@@ -175,6 +184,22 @@ public class SecurityConfiguration {
                 // adding a custom filter after all other filters
                 .addFilterAfter(new AnotherFilter(), AuthorizationFilter.class);
         return http.build();
+    }
+
+
+
+    // CORS CONFIGURATION
+    // use CORS like an ACL for front-ends or other services to connect to the site
+    // don't need if hosting public endpoints to be accessed from anywhere, use withDefaults instead
+    // CORS multiple configs can be applied to different scopes much like csrf configs
+    @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("https://whateverdomain.com")); // adding origin apps
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE")); // allowed HTTP methods
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration); // url pattern match for where to apply CORS
+        return source;
     }
 
 
