@@ -26,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
 import org.springframework.security.web.context.DelegatingSecurityContextRepository;
@@ -147,7 +148,7 @@ public class SecurityConfiguration {
                 // ----- BEGIN AUTHORIZATION CONFIG -----
                 .authorizeHttpRequests(authorize -> authorize
                         // matching rules
-                        .requestMatchers("/", "/manual-auth-storage").permitAll() // authenticating on /manual... requires csrf disable
+                        .requestMatchers("/", "/manual-auth-storage", "/static/images/**").permitAll() // authenticating on /manual... requires csrf disable
                         .requestMatchers("/another-page").hasAuthority("ROLE_ADMIN")
 //                        .requestMatchers("/resource/**").hasAuthority("ROLE_ADMIN") // everything under /resources/
 //                        .requestMatchers("/resource/{name}").access(
@@ -168,8 +169,11 @@ public class SecurityConfiguration {
                 .exceptionHandling(exceptionHandling -> exceptionHandling.accessDeniedPage("/access-denied"))
                 // sets the types of authentication that will be available
                 .httpBasic(Customizer.withDefaults()) // enables basic auth
-                .formLogin(Customizer.withDefaults()); // enables an HTML form based login
+                .formLogin(Customizer.withDefaults()) // enables an HTML form based login
 //                .formLogin(form -> form.loginPage("/login").permitAll()); // specifying a custom login page
+
+                // adding a custom filter after all other filters
+                .addFilterAfter(new AnotherFilter(), AuthorizationFilter.class);
         return http.build();
     }
 
