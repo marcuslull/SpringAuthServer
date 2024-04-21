@@ -10,7 +10,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 
 public class AnotherFilter extends OncePerRequestFilter {
     @Override
@@ -28,16 +27,9 @@ public class AnotherFilter extends OncePerRequestFilter {
             @Override
             public void run() {
                 // Do things here...
-
                 Authentication authentication = SecurityContextHolder.getContext().getAuthentication(); // gets the authentication from the context
-                try {
-                    final HttpServletResponse asyncResponse = (HttpServletResponse) async.getResponse(); // gets the response from the wrapper
-                    asyncResponse.setStatus(HttpServletResponse.SC_OK); // sets the HTTP response code
-                    asyncResponse.getWriter().write("Async context authentication token: " + authentication); // prints the value of authentication
-                    async.complete(); // closes the async thread
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+                System.out.println("Async context authentication token: " + authentication);
+                async.complete(); // closes the async thread
             }
         });
 
