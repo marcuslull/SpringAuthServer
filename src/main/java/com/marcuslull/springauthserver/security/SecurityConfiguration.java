@@ -287,14 +287,16 @@ public class SecurityConfiguration {
     public RegisteredClientRepository registeredClientRepository() {
         // OAuth2 required component #4/7 - We need to store and manage registered clients somewhere
         RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString()) // give the client a random ID
-                .clientId("oidc-client") // username
+                .clientId("client") // username
                 .clientSecret("{noop}secret") // password
+//                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE) // accepted auth method
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST) // accepted auth method
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC) // accepted auth method
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS) // type of grant available
-//                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE) // type of grant available
-//                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN) // type of grant available
-                .redirectUri("https://127.0.0.1:8443/login/oauth2/code/oidc-client") // after the user authenticates, this is where they get sent
-                .postLogoutRedirectUri("https://127.0.0.1:8443/") // after the user logs out this is where they get sent
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE) // type of grant available
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN) // type of grant available
+                .redirectUri("http://localhost:1234/callback") // after the user authenticates, this is where they get sent
+                .postLogoutRedirectUri("https://localhost:8443/") // after the user logs out this is where they get sent
                 .scope(OidcScopes.OPENID) // info sent with the authorization, the resource server will have access to this
                 .scope(OidcScopes.PROFILE) // info sent with the authorization, the resource server will have access to this user info
                 .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build()) // requires the consent page during the users login
